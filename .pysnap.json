@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "pysnap_version": "1.0.0",
+  "template": "fastapi",
+  "template_version": "1.0.0",
+  "options": {
+    "framework": "fastapi",
+    "database": "postgresql",
+    "include_auth": false,
+    "include_docker": true,
+    "include_ci": true,
+    "package_manager": "uv",
+    "include_tests": true,
+    "project_name": "Weather-API"
+  },
+  "infrastructure_files": [
+    ".dockerignore",
+    ".github/workflows/ci.yml",
+    "Dockerfile",
+    "docker-compose.yml"
+  ],
+  "generated_at": "2026-04-06T15:35:25.679798+00:00"
+}
