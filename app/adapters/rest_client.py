@@ -1,8 +1,9 @@
-"""This module implements the RestClient class to be used as a standard way of communication to another entity."""
+"""Async HTTP client built on httpx."""
+import asyncio
 import logging
-import requests
-import urllib3
-import time
+
+import httpx
+
 from app.core.exceptions import AppBaseException
 
 logger = logging.getLogger(__name__)
@@ -16,155 +17,121 @@ class RestClientException(AppBaseException):
 
 
 class RestClient:
-    def __init__(self, base_url, authorization_header=None, timeout=10, verify_ssl=False, ciphers_ssl=False,
-                 max_retry=2, retry_wait=3):
+    def __init__(
+        self,
+        base_url: str,
+        authorization_header: str | None = None,
+        timeout: int = 10,
+        verify_ssl: bool = True,
+        max_retry: int = 2,
+        retry_wait: float = 3,
+    ):
         logger.info(f"Initiating {type(self).__name__}")
         self.base_url = base_url
         self.authorization_header = authorization_header
         self.timeout = timeout
         self.verify_ssl = verify_ssl
-        self.ciphers_ssl = ciphers_ssl
         self.max_retry = max_retry
         self.retry_wait = retry_wait
 
-        if not self.verify_ssl:
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        if self.ciphers_ssl:
-            requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS = 'ALL:@SECLEVEL=1'
+    async def send(
+        self,
+        endpoint: str,
+        method: str = "GET",
+        params: dict | None = None,
+        data: dict | None = None,
+        headers: dict | None = None,
+        accept: str = "application/json",
+        expected_status: int | None = None,
+        fail_request: bool = True,
+        timeout: int | None = None,
+    ) -> dict | bytes | None:
+        """Send an HTTP request with retry logic.
 
-    def send(
-            self,
-            endpoint,
-            method="GET",
-            params=None,
-            data=None,
-            content_type=None,
-            headers=None,
-            auth=None,
-            files=None,
-            accept="application/json",
-            expected_status=None,
-            fail_request=True,
-            timeout=None,
-            overwrite_timeout=False
-    ):
-
-        """
         Parameters
         ----------
-        endpoint: str - endpoint to send to ( will be concatenated with base_url )
-        method: str - method of the request
-        data: json/blob - data to be sent
-        content_type: str - content type of the request data
-        accept: str - content type of the response
-        headers: dict - key value pairs of request header other than defaults
-        auth: HttpBasicAuth
-        params: dict - key value pairs of request parameters
-        files: file objects - files to be sent in the request
-        fail_request: bool - log response in case of failure
-        timeout: int - timeout of the request
-        overwrite_timeout: bool - if true will overwrite default timeout
-        expected_status: str - exact expected status ( if not provided, response status will be verified in range 2xx )
-        Returns
-        -------
+        endpoint : str
+            Path appended to base_url.
+        method : str
+            HTTP method (GET, POST, …).
+        params : dict | None
+            Query parameters.
+        data : dict | None
+            JSON body payload.
+        headers : dict | None
+            Extra headers merged with defaults.
+        accept : str
+            Accept header value.
+        expected_status : int | None
+            Exact expected status code. If None, any 2xx is accepted.
+        fail_request : bool
+            Raise on failure after retries.
+        timeout : int | None
+            Per-request timeout override.
         """
-
-        request_url = self.base_url + endpoint
-
-        request = self._prepare_request(
-            method=method,
-            url=request_url,
-            data=data,
-            params=params,
-            headers=headers,
-            auth=auth,
-            files=files,
-            content_type=content_type,
-            accept=accept,
-        )
+        url = self.base_url + endpoint
+        req_headers = self._build_headers(accept, headers)
+        effective_timeout = timeout or self.timeout
 
         response = None
         for _ in range(self.max_retry):
-            response = self._send_request(request=request, timeout=timeout, overwrite_timeout=overwrite_timeout)
+            response = await self._do_request(
+                method, url, params, data, req_headers, effective_timeout
+            )
             if response is not None and self._validate_response(
-                    status_code=response.status_code, expected_status=expected_status
+                response.status_code, expected_status
             ):
-                return self._get_response(response=response, accept=accept)
+                return self._parse_response(response, accept)
 
-            time.sleep(self.retry_wait)
+            await asyncio.sleep(self.retry_wait)
 
         if fail_request:
-            self._fail_request(request, response)
+            self._fail_request(method, url, response)
 
-    def _prepare_request(self, method, url, data, params, headers, auth, files, content_type, accept):
-
-        _headers = {}
-        if content_type:
-            _headers.update({"Content-Type": content_type})
-
-        if accept:
-            _headers.update({"Accept": accept})
-
+    def _build_headers(self, accept: str, extra: dict | None = None) -> dict:
+        h: dict[str, str] = {"Accept": accept}
         if self.authorization_header:
-            _headers.update({"Authorization": self.authorization_header})
+            h["Authorization"] = self.authorization_header
+        if extra:
+            h.update(extra)
+        return h
 
-        if headers:
-            _headers.update(headers)
-
-        if isinstance(data, dict):
-            request = requests.Request(method, url, json=data, params=params, headers=_headers, auth=auth,
-                                       files=files).prepare()
-        else:
-            request = requests.Request(method, url, data=data, params=params, headers=_headers, auth=auth,
-                                       files=files).prepare()
-
-        return request
-
-    def _send_request(self, request, timeout=None, overwrite_timeout=False):
-        session = requests.session()
+    async def _do_request(
+        self, method: str, url: str, params, data, headers, timeout
+    ) -> httpx.Response | None:
         try:
-            if overwrite_timeout:
-                timeout = timeout
-            else:
-                timeout = self.timeout
-            response = session.send(request, timeout=timeout, verify=self.verify_ssl)
+            async with httpx.AsyncClient(verify=self.verify_ssl) as client:
+                response = await client.request(
+                    method, url, params=params, json=data, headers=headers, timeout=timeout
+                )
+                return response
         except Exception as ex:
-            logger.error(f"Failed to {request.method} {request.url} | {ex}", exc_info=True)
-        else:
-            return response
-        finally:
-            session.close()
+            logger.error(f"Failed to {method} {url} | {ex}", exc_info=True)
+            return None
 
-    @classmethod
-    def _validate_response(cls, status_code, expected_status):
+    @staticmethod
+    def _validate_response(status_code: int, expected_status: int | None) -> bool:
         if expected_status:
             return status_code == expected_status
-        else:
-            return 200 <= status_code < 300
+        return 200 <= status_code < 300
 
-    @classmethod
-    def _get_response(cls, response, accept):
-        if response.text and len(response.text) > 0:
-            if "multipart/form-data" in response.headers.get("Content-Type",
-                                                             "") or "attachment" in response.headers.get(
-                "Content-Disposition", ""):
-                return response.content
-            if (accept in ["application/json", "application/yang-data+json"] or response.headers.get("Content-Type") in
-                    ["application/json", "application/yang-data+json"]):
-                return response.json()
-            else:
-                return response.content
-        else:
+    @staticmethod
+    def _parse_response(response: httpx.Response, accept: str) -> dict | bytes:
+        if not response.text:
             return {}
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in accept or "application/json" in content_type:
+            return response.json()
+        return response.content
 
     @classmethod
-    def _fail_request(cls, request, response):
-        logger.error(
-            f"Failed HTTP request: {request.method} {request.url}" + f" with Status: {response.status_code}\n"
-            if response is not None
-            else "",
-            exc_info=True,
-        )
+    def _fail_request(cls, method: str, url: str, response: httpx.Response | None):
         if response is not None:
-            logger.error(response.text + "\n", exc_info=True)
+            logger.error(
+                f"Failed HTTP request: {method} {url} with Status: {response.status_code}",
+                exc_info=True,
+            )
+            logger.error(response.text, exc_info=True)
+        else:
+            logger.error(f"Failed HTTP request: {method} {url} — no response", exc_info=True)
         raise RestClientException()

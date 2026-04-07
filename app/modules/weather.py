@@ -5,6 +5,7 @@ from app.core.exceptions import ExternalAPIException, WrongStatusCodeException
 logger = logging.getLogger(__name__)
 
 
+
 ENDPOINTS = {
     "CURRENT_WEATHER": "/current",
 }
@@ -15,16 +16,16 @@ class Weather:
         logger.info(f"Initiating {type(self).__name__} ...")
         self.authenticator = authenticator
 
-    def get_current_weather(self, destination):
-        data = self._query_current_weather(destination)
+    async def get_current_weather(self, destination):
+        data = await self._query_current_weather(destination)
         return data
 
-    def _query_current_weather(self, destination):
+    async def _query_current_weather(self, destination):
         params = {
             "query": destination,
             "access_key": self.authenticator.api_key,
         }
-        response = self.authenticator.rest_client.send(
+        response = await self.authenticator.rest_client.send(
             endpoint=f"{ENDPOINTS['CURRENT_WEATHER']}",
             method="GET",
             params=params,
@@ -33,10 +34,10 @@ class Weather:
 
         if response is None:
             raise WrongStatusCodeException()
-        # if isinstance(response, dict) and response.get("success") is False:
-        #     provider_error = response.get("error", {})
-        #     raise ExternalAPIException(
-        #         msg="Weather provider returned an error",
-        #         details=provider_error,
-        #     )
+        if isinstance(response, dict) and response.get("success") is False:
+            provider_error = response.get("error", {})
+            raise ExternalAPIException(
+                msg="Weather provider returned an error",
+                details=provider_error,
+            )
         return response

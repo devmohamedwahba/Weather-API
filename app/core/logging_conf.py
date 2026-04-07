@@ -4,7 +4,7 @@ from app.core.config import DevConfig, ProdConfig, config
 
 handlers = ["default", "rotating_file"]
 if isinstance(config, ProdConfig):
-    handlers = ["default", "rotating_file", "logtail"]
+    handlers = ["default", "rotating_file"]
 
 
 def configure_logging() -> None:
@@ -36,7 +36,7 @@ def configure_logging() -> None:
                     "class": "rich.logging.RichHandler",
                     "level": "DEBUG",
                     "formatter": "console",
-                    "filters": ["correlation_id", "email_obfuscation"]
+                    "filters": ["correlation_id"]
                 },
                 "rotating_file": {
                     "class": "logging.handlers.RotatingFileHandler",
@@ -46,7 +46,7 @@ def configure_logging() -> None:
                     "maxBytes": 1024 * 1024,  # 1MB
                     "backupCount": 5,
                     "encoding": "utf8",
-                    "filters": ["correlation_id", "email_obfuscation"]
+                    "filters": ["correlation_id"]
                 }
             },
             "loggers": {

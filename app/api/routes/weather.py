@@ -21,7 +21,7 @@ async def current_weather(query: str = Query(..., description="City name or loca
 
     logger.info(f"Cache miss for query='{query}', fetching from API")
     client = WeatherClient()
-    data = client.get_weather_instance().get_current_weather(query)
+    data = await client.get_weather_instance().get_current_weather(query)
 
     cache.set(cache_key, data)
     logger.info(f"Cached response for query='{query}' key='{cache_key}'")

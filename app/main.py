@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    yield
 
 
 app = FastAPI(
@@ -25,6 +26,7 @@ app = FastAPI(
     version=config.VERSION,
     description=config.DESCRIPTION,
     openapi_url=f"{config.API_PREFIX}/openapi.json",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
