@@ -1,10 +1,6 @@
-import logging
 from logging.config import dictConfig
 
 from app.core.config import DevConfig, ProdConfig, config
-
-
-
 
 handlers = ["default", "rotating_file"]
 if isinstance(config, ProdConfig):
