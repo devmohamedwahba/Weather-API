@@ -18,6 +18,7 @@ dependencies = [
     "requests>=2.33.1",
     "rich>=14.3.3",
     "asgi-correlation-id>=4.3.4",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]

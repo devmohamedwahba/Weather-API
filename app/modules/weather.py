@@ -32,12 +32,11 @@ class Weather:
         )
 
         if response is None:
-            raise WrongStatusCodeException
-        if isinstance(response, dict) and response.get("success") is False:
-            provider_error = response.get("error", {})
-            raise ExternalAPIException(
-                msg="Weather provider returned an error",
-                status_code=502,
-                details=provider_error,
-            )
+            raise WrongStatusCodeException()
+        # if isinstance(response, dict) and response.get("success") is False:
+        #     provider_error = response.get("error", {})
+        #     raise ExternalAPIException(
+        #         msg="Weather provider returned an error",
+        #         details=provider_error,
+        #     )
         return response

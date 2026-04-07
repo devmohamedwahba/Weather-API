@@ -23,6 +23,8 @@ class GlobalConfig(BaseConfig):
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
     WEATHERSTACK_API_BASE_URL: Optional[str] = None
     WEATHERSTACK_API_KEY: Optional[str] = None
+    REDIS_URL: str = "redis://redis:6379/0"
+    CACHE_TTL: int = 3600
 
 
 class DevConfig(GlobalConfig):

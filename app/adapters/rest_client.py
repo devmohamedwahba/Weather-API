@@ -9,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 class RestClientException(AppBaseException):
-    def __init__(self, msg="Failed to send request"):
+    status_code = 503
+
+    def __init__(self, msg="External service is unavailable"):
         self.msg = msg
 
 
@@ -165,4 +167,4 @@ class RestClient:
         )
         if response is not None:
             logger.error(response.text + "\n", exc_info=True)
-        raise RestClientException
+        raise RestClientException()
